@@ -2,4 +2,4 @@ streamlit
 pandas
 matplotlib
 openpyxl
-japanize-matplotlib
+japanize-matplotlib>=1.1.3

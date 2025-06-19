@@ -1,13 +1,27 @@
-# app.py (診断用：肘トルクの3軸成分をプロット)
+# app.py (診断用・バグ修正版)
 
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-import japanize_matplotlib
 import io
 import re
 import os
+import matplotlib.font_manager as fm # フォントを管理するライブラリをインポート
+
+# --- Font Setup ---
+# アプリに同梱したフォントファイルを指定
+font_path = 'NotoSansJP-Regular.ttf'
+
+# フォントが見つかれば、Matplotlibに設定
+if os.path.exists(font_path):
+    fm.fontManager.addfont(font_path)
+    plt.rcParams['font.family'] = 'Noto Sans JP'
+    plt.rcParams['axes.unicode_minus'] = False # マイナス記号の表示設定
+else:
+    # フォントファイルがない場合、警告を出す
+    st.warning(f"フォントファイル '{font_path}' が見つかりません。")
+
 
 st.set_page_config(layout="wide")
 st.title('🔬 肘関節トルク 軸診断ツール')
@@ -52,7 +66,8 @@ if uploaded_file:
             ax.plot(time, moment_z, label='肘関節 Z軸 トルク', color='blue', linewidth=2)
 
             # --- Formatting ---
-            base_name = re.match(r'^[a-zA-Z_]+', uploaded_file.name).group(0).rstrip('_') if re.match(r'^[a-zA-Z_]+', uploaded_file.name) else 'subject'
+            base_name_match = re.match(r'^[a-zA-Z_]+', uploaded_file.name)
+            base_name = base_name_match.group(0).rstrip('_') if base_name_match else 'subject'
             ax.set_title(f'{base_name}投手 肘関節トルクの3軸成分', fontsize=16)
             ax.set_xlabel('時間 (秒)', fontsize=12)
             ax.set_ylabel('トルク (N.mm/kg)', fontsize=12)

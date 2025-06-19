@@ -1,4 +1,4 @@
-# app.py (最終版・表示形式選択機能付き)
+# app.py (最終版・タイトル編集機能付き)
 
 import streamlit as st
 import pandas as pd
@@ -14,7 +14,7 @@ font_path = 'NotoSansJP-Regular.ttf'
 if os.path.exists(font_path):
     fm.fontManager.addfont(font_path)
     plt.rcParams['font.family'] = 'Noto Sans JP'
-    plt.rcParams['axes.unicode_minus'] = False # This is important for displaying negative signs correctly
+    plt.rcParams['axes.unicode_minus'] = False
 else:
     st.warning(f"フォントファイル '{font_path}' が見つかりません。グラフの文字が正しく表示されない可能性があります。")
 
@@ -39,14 +39,12 @@ with st.sidebar:
         format_func=lambda x: '右投手' if x == 'R' else '左投手'
     )
     
-    # ★★★ ここが追加された機能です ★★★
     graph_type = st.radio(
         'グラフの表示形式を選択してください',
         ('absolute', 'raw'),
-        index=0, # Default to 'absolute'
+        index=0,
         format_func=lambda x: '大きさ（絶対値）' if x == 'absolute' else '向き（生データ）'
     )
-    # ★★★ ここまで ★★★
 
     st.header('ステップ2: ファイルをアップロード')
     uploaded_files = st.file_uploader(
@@ -67,21 +65,13 @@ if uploaded_files and len(uploaded_files) == 3:
         for uploaded_file in uploaded_files:
             try:
                 df = pd.read_excel(uploaded_file, header=[0, 1, 2])
-                
-                # Extract raw data first
                 pelvis_vel = df[(f'{side_to_analyze}PelvisAngles', "Z'", 'deg/s')]
                 thorax_vel = df[(f'{side_to_analyze}ThoraxAngles', "Z'", 'deg/s')]
                 shoulder_vel = df[(f'{side_to_analyze}ShoulderAngles', "Z'", 'deg/s')]
                 elbow_vel = df[(f'{side_to_analyze}ElbowAngles', "X'", 'deg/s')]
 
-                # ★★★ ここが変更点です ★★★
-                # Apply .abs() only if the user chose 'absolute'
                 if graph_type == 'absolute':
-                    pelvis_vel = pelvis_vel.abs()
-                    thorax_vel = thorax_vel.abs()
-                    shoulder_vel = shoulder_vel.abs()
-                    elbow_vel = elbow_vel.abs()
-                # ★★★ ここまで ★★★
+                    pelvis_vel, thorax_vel, shoulder_vel, elbow_vel = pelvis_vel.abs(), thorax_vel.abs(), shoulder_vel.abs(), elbow_vel.abs()
 
                 all_pelvis_curves.append(normalize_curve(pelvis_vel))
                 all_thorax_curves.append(normalize_curve(thorax_vel))
@@ -92,16 +82,25 @@ if uploaded_files and len(uploaded_files) == 3:
                 st.stop()
     st.success('データ処理が完了しました。')
 
-    # --- Averaging and Plotting ---
-    mean_pelvis = np.mean(all_pelvis_curves, axis=0)
-    std_pelvis = np.std(all_pelvis_curves, axis=0)
-    mean_thorax = np.mean(all_thorax_curves, axis=0)
-    std_thorax = np.std(all_thorax_curves, axis=0)
-    mean_shoulder = np.mean(all_shoulder_curves, axis=0)
-    std_shoulder = np.std(all_shoulder_curves, axis=0)
-    mean_elbow = np.mean(all_elbow_curves, axis=0)
-    std_elbow = np.std(all_elbow_curves, axis=0)
+    # Calculate mean and std dev
+    mean_pelvis, std_pelvis = np.mean(all_pelvis_curves, axis=0), np.std(all_pelvis_curves, axis=0)
+    mean_thorax, std_thorax = np.mean(all_thorax_curves, axis=0), np.std(all_thorax_curves, axis=0)
+    mean_shoulder, std_shoulder = np.mean(all_shoulder_curves, axis=0), np.std(all_shoulder_curves, axis=0)
+    mean_elbow, std_elbow = np.mean(all_elbow_curves, axis=0), np.std(all_elbow_curves, axis=0)
+    
+    # --- Get Subject Name and Set Up Title Editor ---
+    first_filename = uploaded_files[0].name
+    match = re.match(r'^[a-zA-Z_]+', first_filename)
+    base_name = match.group(0).rstrip('_') if match else 'subject'
+    
+    # ★★★ ここが追加された機能です ★★★
+    st.subheader('グラフのカスタマイズ')
+    default_title_suffix = '（絶対値）' if graph_type == 'absolute' else '（生データ）'
+    default_title = f'{base_name}投手 平均角速度の運動連鎖 {default_title_suffix}'
+    custom_title = st.text_input("グラフタイトルを編集:", value=default_title)
+    # ★★★ ここまで ★★★
 
+    # --- Plotting ---
     fig, ax = plt.subplots(figsize=(12, 7))
     normalized_time_axis = np.linspace(0, 100, 101)
 
@@ -115,21 +114,13 @@ if uploaded_files and len(uploaded_files) == 3:
     for name, data in segments_for_plot.items():
         ax.plot(normalized_time_axis, data['mean'], label=name, color=data['color'], linewidth=2)
         ax.fill_between(normalized_time_axis, data['mean'] - data['std'], data['mean'] + data['std'], color=data['color'], alpha=0.2)
-
-    # --- Get Subject Name and set dynamic titles/labels ---
-    first_filename = uploaded_files[0].name
-    match = re.match(r'^[a-zA-Z_]+', first_filename)
-    base_name = match.group(0).rstrip('_') if match else 'subject'
     
-    if graph_type == 'absolute':
-        title_suffix = '（絶対値）'
-        y_label = '角速度の大きさ (deg/s)'
-    else:
-        title_suffix = '（生データ・向きあり）'
-        y_label = '角速度 (deg/s)'
-        ax.axhline(0, color='black', linewidth=0.5) # Add zero line for raw data graph
+    # Set dynamic titles/labels
+    y_label = '角速度の大きさ (deg/s)' if graph_type == 'absolute' else '角速度 (deg/s)'
+    if graph_type == 'raw':
+        ax.axhline(0, color='black', linewidth=0.5)
 
-    ax.set_title(f'{base_name}投手 平均角速度の運動連鎖 {title_suffix}', fontsize=16)
+    ax.set_title(custom_title, fontsize=16) # Use the custom title
     ax.set_xlabel('正規化時間 (%) [ステップ脚最大挙上～ボールリリース]', fontsize=12)
     ax.set_ylabel(y_label, fontsize=12)
     ax.legend(fontsize=10)
@@ -137,21 +128,22 @@ if uploaded_files and len(uploaded_files) == 3:
     
     st.pyplot(fig)
 
+    # --- Download Button ---
     img_buf = io.BytesIO()
     fig.savefig(img_buf, format='png', dpi=200)
     
     st.download_button(
         label="グラフをダウンロード",
         data=img_buf,
-        file_name=f"{base_name}_avg_velocity_{graph_type}.png",
+        file_name=f"{base_name}_average_velocity_custom.png",
         mime="image/png"
     )
 
+    # --- Peak Summary ---
     with st.expander("ピーク順序のサマリーを表示"):
         peaks_info = []
-        # For summary, always use absolute values to find the timing of max speed
         for name, data in segments_for_plot.items():
-            peak_idx = np.argmax(np.abs(data['mean'])) # Use absolute value for peak finding
+            peak_idx = np.argmax(np.abs(data['mean']))
             peaks_info.append({'部位': name, 'ピーク到達時間 (%)': normalized_time_axis[peak_idx]})
         
         sorted_peaks = sorted(peaks_info, key=lambda p: p['ピーク到達時間 (%)'])

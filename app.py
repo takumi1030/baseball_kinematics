@@ -1,14 +1,25 @@
-# app.py
+# app.py (最終・フォント埋め込み版)
 
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-import japanize_matplotlib
 import io
 import re
-import zipfile
 import os
+import matplotlib.font_manager as fm # フォントを管理するライブラリをインポート
+
+# --- Font Setup ---
+# アプリに同梱したフォントファイルを指定
+font_path = 'NotoSansJP-Regular.ttf'
+
+# フォントが見つかれば、Matplotlibに設定
+if os.path.exists(font_path):
+    fm.fontManager.addfont(font_path)
+    plt.rcParams['font.family'] = 'Noto Sans JP'
+else:
+    # フォントファイルがない場合、警告を出す
+    st.warning(f"フォントファイル '{font_path}' が見つかりません。GitHubにアップロードされているか確認してください。")
 
 # --- Helper Function: Time Normalization ---
 def normalize_curve(data_series, num_points=101):
@@ -44,7 +55,6 @@ with st.sidebar:
 if uploaded_files and len(uploaded_files) == 3:
     st.header('解析結果')
     
-    # --- Data Processing ---
     with st.spinner('データを処理中...'):
         all_pelvis_curves, all_thorax_curves, all_shoulder_curves, all_elbow_curves = [], [], [], []
         
@@ -65,7 +75,6 @@ if uploaded_files and len(uploaded_files) == 3:
                 st.stop()
     st.success('データ処理が完了しました。')
 
-    # --- Averaging ---
     mean_pelvis = np.mean(all_pelvis_curves, axis=0)
     std_pelvis = np.std(all_pelvis_curves, axis=0)
     mean_thorax = np.mean(all_thorax_curves, axis=0)
@@ -75,7 +84,6 @@ if uploaded_files and len(uploaded_files) == 3:
     mean_elbow = np.mean(all_elbow_curves, axis=0)
     std_elbow = np.std(all_elbow_curves, axis=0)
 
-    # --- Plotting ---
     fig, ax = plt.subplots(figsize=(12, 7))
     normalized_time_axis = np.linspace(0, 100, 101)
 
@@ -90,7 +98,6 @@ if uploaded_files and len(uploaded_files) == 3:
         ax.plot(normalized_time_axis, data['mean'], label=name, color=data['color'], linewidth=2)
         ax.fill_between(normalized_time_axis, data['mean'] - data['std'], data['mean'] + data['std'], color=data['color'], alpha=0.2)
 
-    # --- Get Subject Name ---
     first_filename = uploaded_files[0].name
     match = re.match(r'^[a-zA-Z_]+', first_filename)
     base_name = match.group(0).rstrip('_') if match else 'subject'
@@ -103,18 +110,11 @@ if uploaded_files and len(uploaded_files) == 3:
     
     st.pyplot(fig)
 
-    # --- Download Button ---
     img_buf = io.BytesIO()
     fig.savefig(img_buf, format='png', dpi=200)
     
-    st.download_button(
-        label="グラフをダウンロード",
-        data=img_buf,
-        file_name=f"{base_name}_average_velocity.png",
-        mime="image/png"
-    )
+    st.download_button(label="グラフをダウンロード", data=img_buf, file_name=f"{base_name}_average_velocity.png", mime="image/png")
 
-    # --- Peak Summary ---
     with st.expander("ピーク順序のサマリーを表示"):
         peaks_info = []
         for name, data in segments_for_plot.items():
@@ -122,10 +122,6 @@ if uploaded_files and len(uploaded_files) == 3:
             peaks_info.append({'部位': name, '正規化時間 (%)': normalized_time_axis[peak_idx]})
         
         sorted_peaks = sorted(peaks_info, key=lambda p: p['正規化時間 (%)'])
-        
         peak_df = pd.DataFrame(sorted_peaks)
         peak_df.index = peak_df.index + 1
         st.dataframe(peak_df)
-
-elif uploaded_files and len(uploaded_files) != 3:
-    st.warning('ファイルを3つアップロードしてください。')

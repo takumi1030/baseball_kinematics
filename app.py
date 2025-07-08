@@ -1,4 +1,4 @@
-# app.py (キャッシュ機能無効化版)
+# app.py (最終形態版: シンプルモード / ダッシュボードモード切替機能付き)
 
 import streamlit as st
 import pandas as pd
@@ -29,7 +29,7 @@ def normalize_curve(data_series, num_points=101):
 # ==============================================================================
 # ANALYSIS FUNCTIONS (These are called by the modes)
 # ==============================================================================
-# @st.cache_data の行を削除
+# @st.cache_data # Cache the result to avoid re-calculating ← この行を削除
 def process_all_data(_uploaded_files, side):
     """Reads uploaded files and calculates all relevant normalized metrics."""
     all_metrics_data = {
